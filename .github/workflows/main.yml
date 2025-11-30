@@ -1,0 +1,79 @@
+name: Workflow-CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+env:
+  TRAIN_DATASET: "dataset/train_dataset.csv"
+  TEST_DATASET: "dataset/test_dataset.csv"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    environment: username
+
+    steps:
+      # Checkout repo
+      - uses: actions/checkout@v3
+
+      # Setup Python 3.12.7
+      - name: Set up Python 3.12.7
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.12.7"
+
+      # Check Env Variables
+      - name: Check Env
+        run: |
+          echo "Train Dataset: $TRAIN_DATASET"
+          echo "Test Dataset: $TEST_DATASET"
+
+      # Install dependencies
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install mlflow
+
+      # Run MLflow project
+      - name: Run mlflow project
+        run: |
+          mlflow run MLproject \
+            -P n_estimators=505 \
+            -P max_depth=35 \
+            -P train_dataset=$TRAIN_DATASET \
+            -P test_dataset=$TEST_DATASET \
+            --env-manager=local
+
+      # Set up Git and LFS using bot
+      - name: Set up Git and LFS
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git lfs install
+          git lfs track "mlruns/**" || true
+          git add .gitattributes || true
+          git commit -m "Track mlruns with Git LFS" || true
+          git push origin main || true
+
+      # Save mlruns to GitHub Repository using bot
+      - name: Save mlruns to repo
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git remote set-url origin https://x-access-token:${GITHUB_TOKEN}@github.com/${{ github.repository }}
+          git add mlruns/
+          # Commit jika ada perubahan
+          if ! git diff --cached --quiet; then
+            git commit -m "Save mlruns from CI run"
+            git push origin main
+          else
+            echo "No changes to commit"
+          fi
