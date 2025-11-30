@@ -7,16 +7,6 @@ on:
   pull_request:
     branches:
       - main
-  workflow_dispatch:
-    inputs:
-      n_estimators:
-        description: 'Number of trees in RandomForest'
-        default: 505
-        required: true
-      max_depth:
-        description: 'Max depth of trees'
-        default: 35
-        required: true
 
 env:
   TRAIN_DATASET: "dataset/train_dataset.csv"
@@ -26,52 +16,62 @@ jobs:
   build:
     runs-on: ubuntu-latest
 
+
     steps:
       # Checkout repo
       - uses: actions/checkout@v3
 
-      # Setup Python
+      # Setup Python 3.12.7
       - name: Set up Python 3.12.7
         uses: actions/setup-python@v4
         with:
           python-version: "3.12.7"
 
-      # Install MLflow
-      - name: Install MLflow
+      # Check Env Variables
+      - name: Check Env
+        run: |
+          echo "Train Dataset: $TRAIN_DATASET"
+          echo "Test Dataset: $TEST_DATASET"
+
+      # Install dependencies
+      - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install mlflow
 
       # Run MLflow project
-      - name: Run MLflow project
+      - name: Run mlflow project
         run: |
           mlflow run MLProject \
-            -P n_estimators=${{ github.event.inputs.n_estimators || 505 }} \
-            -P max_depth=${{ github.event.inputs.max_depth || 35 }} \
+            -P n_estimators=505 \
+            -P max_depth=35 \
             -P train_dataset=$TRAIN_DATASET \
             -P test_dataset=$TEST_DATASET \
             --env-manager=local
 
-      # Commit & push mlruns using GitHub Actions bot
-      - name: Commit and Push mlruns
+      # Set up Git and LFS using bot
+      - name: Set up Git and LFS
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git lfs install
+          git lfs track "mlruns/**" || true
+          git add .gitattributes || true
+          git commit -m "Track mlruns with Git LFS" || true
+          git push origin main || true
+
+      # Save mlruns to GitHub Repository using bot
+      - name: Save mlruns to repo
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # Configure Git to use GitHub Actions bot
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-
-          # Install & track Git LFS for mlruns
-          git lfs install
-          git lfs track "mlruns/**" || true
-          git add .gitattributes mlruns/ || true
-
-          # Set remote URL with token
-          git remote set-url origin https://x-access-token:${GITHUB_TOKEN}@github.com/${{ github.repository }}.git
-
+          git remote set-url origin https://x-access-token:${GITHUB_TOKEN}@github.com/${{ github.repository }}
+          git add mlruns/
           # Commit jika ada perubahan
           if ! git diff --cached --quiet; then
-            git commit -m "Update mlruns from CI run"
+            git commit -m "Save mlruns from CI run"
             git push origin main
           else
             echo "No changes to commit"
