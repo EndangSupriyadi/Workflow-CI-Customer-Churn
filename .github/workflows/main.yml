@@ -42,7 +42,7 @@ jobs:
       # Run MLflow project
       - name: Run mlflow project
         run: |
-          mlflow run MLproject \
+          mlflow run MLProject \
             -P n_estimators=505 \
             -P max_depth=35 \
             -P train_dataset=$TRAIN_DATASET \
